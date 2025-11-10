@@ -1,0 +1,580 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <title>QuizBuzzer P2P (HTML/JS)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- PeerJS (P2P) -->
+  <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+  <!-- QRCode -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <style>
+    :root{
+      --indigo:#4f46e5; --indigo-700:#4338ca; --rose:#e11d48; --amber:#f59e0b; --emerald:#10b981;
+      --slate-900:#0f172a; --slate-800:#1e293b; --slate-700:#334155; --slate-600:#475569; --slate-500:#64748b;
+      --slate-300:#cbd5e1; --slate-200:#e2e8f0; --slate-100:#f1f5f9;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Helvetica,Arial,sans-serif;background:var(--slate-100);color:var(--slate-900)}
+    header{background:var(--indigo);color:#fff;padding:12px 16px;box-shadow:0 2px 8px rgba(0,0,0,.1)}
+    header .wrap{max-width:1100px;margin:0 auto;display:flex;gap:12px;align-items:center;justify-content:space-between}
+    header h1{margin:0;font-size:18px;font-weight:800}
+    header button{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.25);color:#fff;padding:6px 10px;border-radius:10px;cursor:pointer}
+    main{max-width:1100px;margin:0 auto;padding:16px}
+    .card{background:#fff;border:1px solid var(--slate-200);border-radius:14px;box-shadow:0 1px 4px rgba(0,0,0,.04);padding:20px}
+    .grid{display:grid;gap:16px}
+    .grid-2{grid-template-columns:1fr 1fr} .grid-3{grid-template-columns:1.1fr 1fr .9fr}
+    .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:none;border-radius:12px;padding:10px 14px;cursor:pointer;font-weight:700}
+    .btn-indigo{background:var(--indigo);color:#fff}.btn-indigo:hover{background:var(--indigo-700)}
+    .btn-ghost{background:#fff;border:1px solid var(--slate-300);color:var(--slate-700)} .btn-ghost:hover{border-color:var(--indigo);color:var(--indigo)}
+    .btn-rose{background:var(--rose);color:#fff} .btn-rose:hover{filter:brightness(.95)}
+    .btn-emerald{background:var(--emerald);color:#fff}
+    .field{display:flex;flex-direction:column;gap:6px}
+    .label{font-size:13px;color:var(--slate-600)}
+    .input,.code{width:100%;padding:10px 12px;border:1px solid var(--slate-300);border-radius:10px;outline:none}
+    .input:focus{border-color:var(--indigo);box-shadow:0 0 0 3px rgba(79,70,229,.15)}
+    .muted{color:var(--slate-600);font-size:14px}
+    .subtle{font-size:12px;color:var(--slate-600)}
+    .center{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+    .hidden{display:none !important}
+    .list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+    .item{display:flex;align-items:center;gap:10px;padding:10px;border-radius:10px;background:var(--slate-100);border-left:4px solid var(--indigo)}
+    .item.first{background:#fff7ed;border-left-color:var(--amber)}
+    .badge{background:var(--indigo);color:#fff;min-width:28px;height:28px;display:inline-flex;align-items:center;justify-content:center;border-radius:999px;font-weight:800}
+    .badge.first{background:var(--amber);color:#111}
+    .score-list li{display:flex;justify-content:space-between;gap:12px;padding:8px 10px;border:1px solid var(--slate-200);border-radius:10px;background:#fff}
+    .buzzer{width:260px;height:260px;border-radius:999px;border:none;color:#fff;font-weight:900;letter-spacing:1px;font-size:28px;
+      background:var(--emerald); box-shadow:0 10px 0 #065f46; transition:transform .1s ease, box-shadow .1s ease, background .1s ease}
+    .buzzer:hover{box-shadow:0 6px 0 #065f46}
+    .buzzer:active{transform:translateY(10px);box-shadow:none;background:#047857}
+    .buzzer.disabled{background:#e2e8f0;color:#64748b;box-shadow:none;transform:none;cursor:not-allowed}
+    .timer{font-variant-numeric:tabular-nums;font-weight:800}
+    @media (max-width:960px){ .grid-3{grid-template-columns:1fr} .grid-2{grid-template-columns:1fr} header h1{font-size:16px}}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <h1>QuizBuzzer P2P</h1>
+      <button id="exitBtn" class="hidden">Salir</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- Landing -->
+    <section id="view-landing" class="card center grid" style="gap:24px">
+      <div class="center" style="gap:6px">
+        <h2 style="margin:0;font-size:28px">Sistema de Pulsadores</h2>
+        <p class="muted" style="margin:0">Elige tu rol para comenzar.</p>
+      </div>
+      <div class="grid grid-2" style="width:100%">
+        <button id="btnHost" class="btn btn-ghost card center" style="padding:24px">
+          <div style="font-size:18px;font-weight:800;color:var(--indigo)">Soy el Profesor</div>
+          <div class="muted">Crear una sala y gestionar pulsadores</div>
+        </button>
+        <button id="btnClient" class="btn btn-ghost card center" style="padding:24px">
+          <div style="font-size:18px;font-weight:800;color:#059669">Soy un Alumno</div>
+          <div class="muted">Unirme a una sala y participar</div>
+        </button>
+      </div>
+    </section>
+
+    <!-- Host -->
+    <section id="view-host" class="hidden grid grid-3">
+      <!-- Panel principal -->
+      <div class="card" style="display:flex;flex-direction:column;gap:14px">
+        <h3 style="margin:0">Panel del Profesor</h3>
+        <div id="hostStatus" class="muted">Iniciando red...</div>
+        <div id="hostReady" class="hidden" style="display:flex;flex-direction:column;gap:12px">
+          <div class="grid" style="grid-template-columns:1fr auto;gap:8px">
+            <div class="field">
+              <label class="label">ID DE LA SALA</label>
+              <input id="roomId" class="code" readonly />
+            </div>
+            <div style="display:flex;gap:8px;align-items:flex-end">
+              <button id="copyBtn" class="btn btn-ghost">Copiar</button>
+              <button id="showQRBtn" class="btn btn-ghost">QR</button>
+            </div>
+          </div>
+          <div class="subtle"><span id="studentCount">0</span> alumnos conectados</div>
+        </div>
+
+        <div class="card" style="display:flex;flex-direction:column;gap:12px">
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+            <div class="field" style="width:140px">
+              <label class="label">Tiempo (seg.)</label>
+              <input id="timerSeconds" class="input" type="number" min="5" step="5" value="30">
+            </div>
+            <button id="timerStartBtn" class="btn btn-emerald">Iniciar pregunta</button>
+            <button id="timerStopBtn" class="btn btn-ghost">Detener</button>
+            <button id="resetBtn" class="btn btn-rose">RESET</button>
+            <div class="muted">Estado: <span id="lockState">desbloqueado</span></div>
+            <div class="timer" id="timerLabel" style="margin-left:auto;font-size:20px">00:00</div>
+          </div>
+          <div class="subtle">Al iniciar pregunta se desbloquean los alumnos y empieza la cuenta atrás. Al llegar a 0 se bloquea automáticamente.</div>
+        </div>
+      </div>
+
+      <!-- Orden de respuesta -->
+      <div class="card" style="display:flex;flex-direction:column;gap:12px">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <div style="font-weight:800">Orden de Respuesta</div>
+          <div id="buzzCountBadge" class="subtle">0 respuestas</div>
+        </div>
+        <ul id="buzzList" class="list"></ul>
+      </div>
+
+      <!-- Marcador -->
+      <div class="card" style="display:flex;flex-direction:column;gap:12px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div style="font-weight:800">Marcador</div>
+          <button id="clearScoresBtn" class="btn btn-ghost">Poner a 0</button>
+        </div>
+        <ul id="scoreList" class="score-list list"></ul>
+      </div>
+    </section>
+
+    <!-- Modal QR -->
+    <div id="qrModal" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center">
+      <div class="card" style="padding:24px;display:flex;flex-direction:column;gap:12px;align-items:center">
+        <div id="qrContainer"></div>
+        <div class="muted" id="qrText"></div>
+        <button id="closeQR" class="btn btn-ghost">Cerrar</button>
+      </div>
+    </div>
+
+    <!-- Client: connect -->
+    <section id="view-client-connect" class="hidden">
+      <div class="card" style="display:flex;flex-direction:column;gap:14px">
+        <div class="center" style="gap:6px">
+          <h3 style="margin:0">Unirse a Clase</h3>
+          <p class="muted">Introduce tus datos para entrar.</p>
+        </div>
+        <div class="grid">
+          <div class="field">
+            <label class="label">Tu Nombre</label>
+            <input id="studentName" class="input" placeholder="Ej: Ana García" />
+          </div>
+          <div class="field">
+            <label class="label">ID de Sala del Profesor</label>
+            <input id="hostIdInput" class="input" placeholder="Pega aquí el ID" />
+          </div>
+        </div>
+        <div id="clientConnectMsg" class="hidden alert"></div>
+        <button id="joinBtn" class="btn btn-indigo">Entrar a Clase</button>
+      </div>
+    </section>
+
+    <!-- Client: buzzer -->
+    <section id="view-client-buzzer" class="hidden center" style="gap:16px">
+      <div class="card center" style="gap:6px">
+        <div class="subtle">Conectado como</div>
+        <div id="youAre" style="font-weight:800"></div>
+        <div class="muted">Estado: <span id="clientLockState">bloqueado</span> · Tiempo: <span id="clientTimer" class="timer">--:--</span></div>
+      </div>
+      <button id="buzzerBtn" class="buzzer disabled" disabled>PULSAR</button>
+      <div id="waitReset" class="hidden subtle">Espera a que el profesor resetee…</div>
+      <div id="myScore" class="subtle">Tu puntuación: 0</div>
+    </section>
+  </main>
+
+  <script>
+    // ========= Utilidades =========
+    const views = {
+      landing: document.getElementById('view-landing'),
+      host: document.getElementById('view-host'),
+      clientConnect: document.getElementById('view-client-connect'),
+      clientBuzzer: document.getElementById('view-client-buzzer'),
+    };
+    const exitBtn = document.getElementById('exitBtn');
+    function show(view){
+      Object.values(views).forEach(v=>v.classList.add('hidden'));
+      view.classList.remove('hidden');
+      exitBtn.classList.toggle('hidden', view===views.landing);
+    }
+    const fmt = (s)=> String(s).padStart(2,'0');
+    const secToMMSS = (secs)=>`${fmt(Math.max(0,Math.floor(secs/60)))}:${fmt(Math.max(0,Math.floor(secs%60)))}`;
+
+    // Sonidos sencillos con WebAudio (sin archivos)
+    let audioCtx;
+    function beep(freq=880, timeMs=150){
+      try{
+        audioCtx = audioCtx || new (window.AudioContext||window.webkitAudioContext)();
+        const o = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        o.type = 'sine'; o.frequency.value = freq;
+        g.gain.value = 0.04;
+        o.connect(g); g.connect(audioCtx.destination);
+        o.start();
+        setTimeout(()=>{ o.stop(); }, timeMs);
+      }catch(e){}
+    }
+    function chordOK(){ beep(1046,120); setTimeout(()=>beep(1318,120),120); }
+    function chordReset(){ beep(392,120); setTimeout(()=>beep(392,120),140); }
+
+    // ========= Estado común =========
+    let hostPeer=null, hostId=null, locked=true, timerInt=null, timerEnd=0;
+    const students = new Map(); // peerId -> {name, conn}
+    let buzzList = [];          // [{id,name,time}]
+    const scores = new Map();   // peerId -> number
+
+    let clientPeer=null, clientConn=null, clientName="", myScore=0, clientLocked=true, clientTimerInt=null, clientTimerEnd=0;
+
+    // ========= Landing =========
+    document.getElementById('btnHost').onclick = startHost;
+    document.getElementById('btnClient').onclick = ()=>show(views.clientConnect);
+    exitBtn.onclick = ()=>{
+      try{ hostPeer && hostPeer.destroy(); }catch(e){}
+      try{ clientPeer && clientPeer.destroy(); }catch(e){}
+      location.reload();
+    };
+
+    // ========= HOST =========
+    const hostStatus = document.getElementById('hostStatus');
+    const hostReady = document.getElementById('hostReady');
+    const roomIdEl = document.getElementById('roomId');
+    const studentCount = document.getElementById('studentCount');
+    const buzzListEl = document.getElementById('buzzList');
+    const buzzCountBadge = document.getElementById('buzzCountBadge');
+    const resetBtn = document.getElementById('resetBtn');
+    const copyBtn = document.getElementById('copyBtn');
+    const lockState = document.getElementById('lockState');
+    const timerLabel = document.getElementById('timerLabel');
+    const timerSeconds = document.getElementById('timerSeconds');
+    const timerStartBtn = document.getElementById('timerStartBtn');
+    const timerStopBtn = document.getElementById('timerStopBtn');
+
+    const scoreList = document.getElementById('scoreList');
+    const clearScoresBtn = document.getElementById('clearScoresBtn');
+
+    const showQRBtn = document.getElementById('showQRBtn');
+    const qrModal = document.getElementById('qrModal');
+    const qrContainer = document.getElementById('qrContainer');
+    const qrText = document.getElementById('qrText');
+    const closeQR = document.getElementById('closeQR');
+
+    function randomId(){ return Math.random().toString(36).substring(2,8).toUpperCase(); }
+
+    function startHost(){
+      show(views.host);
+      hostStatus.textContent = 'Inicializando sala…';
+      initHostPeer();
+    }
+
+    function setLocked(v){
+      locked = v;
+      lockState.textContent = locked ? 'bloqueado' : 'desbloqueado';
+    }
+
+    function broadcast(msg){
+      students.forEach(s=>{ try{ s.conn.open && s.conn.send(msg); }catch(e){} });
+    }
+
+    function initHostPeer(){
+      try{
+        hostPeer = new Peer('quiz-host-' + randomId(), { debug: 1 });
+        hostPeer.on('open', (id)=>{
+          hostId = id;
+          roomIdEl.value = id;
+          hostStatus.classList.add('hidden');
+          hostReady.classList.remove('hidden');
+          updateStudentCount();
+          setLocked(true);
+          updateTimerLabel(0);
+        });
+        hostPeer.on('connection', (conn)=>{
+          conn.on('data', (data)=>onHostData(conn, data));
+          conn.on('close', ()=>removeStudent(conn.peer));
+          conn.on('error', ()=>removeStudent(conn.peer));
+        });
+        hostPeer.on('error', (err)=>{
+          console.error(err);
+          hostStatus.classList.remove('hidden');
+          hostStatus.textContent = 'Error de red: ' + (err && err.type ? err.type : 'desconocido');
+        });
+      }catch(e){
+        console.error(e);
+        hostStatus.textContent = 'No se pudo iniciar la sala.';
+      }
+    }
+
+    function onHostData(conn, data){
+      if(!data || !data.type) return;
+      switch(data.type){
+        case 'JOIN': {
+          const name = String(data.name||'Anónimo');
+          students.set(conn.peer, { name, conn });
+          if (!scores.has(conn.peer)) scores.set(conn.peer, 0);
+          updateStudentCount(); renderScores();
+          // enviar estado inicial al nuevo alumno
+          try{ conn.send({ type:'SCORE', scores: Array.from(scores.entries()) }); }catch(e){}
+          try{ conn.send({ type: locked?'LOCK':'UNLOCK' }); }catch(e){}
+          if (timerEnd>0) try{ conn.send({ type:'TIMER_START', until: timerEnd }); }catch(e){}
+          break;
+        }
+        case 'BUZZ': {
+          if (locked) return; // si está bloqueado, ignoramos
+          // Evitar duplicados por alumno
+          if (buzzList.some(b=>b.id===conn.peer)) return;
+          const entry = { id: conn.peer, name: (students.get(conn.peer)?.name)||'Anónimo', time: Date.now() };
+          buzzList.push(entry);
+          renderBuzzList();
+          chordOK(); // sonido en host
+          // tras el primero, bloquear
+          if (buzzList.length===1){
+            setLocked(true);
+            broadcast({ type:'LOCK' });
+            stopTimer(); // detenemos si hay temporizador
+          }
+          break;
+        }
+      }
+    }
+
+    function updateStudentCount(){ studentCount.textContent = String(students.size); }
+
+    function renderBuzzList(){
+      buzzListEl.innerHTML = '';
+      buzzList.forEach((b, idx)=>{
+        const li = document.createElement('li');
+        li.className = 'item' + (idx===0 ? ' first' : '');
+        const badge = document.createElement('div');
+        badge.className = 'badge' + (idx===0 ? ' first' : '');
+        badge.textContent = String(idx+1);
+        const nameSpan = document.createElement('div');
+        nameSpan.style.fontWeight = '700';
+        nameSpan.textContent = b.name;
+
+        const actions = document.createElement('div');
+        actions.style.marginLeft = 'auto';
+        actions.style.display = 'flex';
+        actions.style.gap = '6px';
+
+        const okBtn = document.createElement('button');
+        okBtn.className = 'btn btn-emerald';
+        okBtn.textContent = '✓';
+        okBtn.onclick = ()=>{ addScore(b.id, +1); okBtn.disabled = true; };
+
+        const wrongBtn = document.createElement('button');
+        wrongBtn.className = 'btn btn-ghost';
+        wrongBtn.textContent = '✗';
+        wrongBtn.onclick = ()=>{ addScore(b.id, 0); wrongBtn.disabled = true; };
+
+        actions.append(okBtn, wrongBtn);
+
+        if (idx===0){
+          const first = document.createElement('div');
+          first.className = 'subtle';
+          first.style.marginLeft = '12px';
+          first.textContent = '¡Primero!';
+          li.append(badge, nameSpan, first, actions);
+        } else {
+          li.append(badge, nameSpan, actions);
+        }
+        buzzListEl.appendChild(li);
+      });
+      buzzCountBadge.textContent = buzzList.length + ' respuestas';
+    }
+
+    function addScore(peerId, delta){
+      if (!scores.has(peerId)) scores.set(peerId, 0);
+      if (delta>0) scores.set(peerId, scores.get(peerId)+delta);
+      renderScores();
+      broadcast({ type:'SCORE', scores: Array.from(scores.entries()) });
+    }
+
+    function renderScores(){
+      const entries = Array.from(scores.entries()).map(([id,score]) => ({ id, score, name: students.get(id)?.name || '—' }));
+      entries.sort((a,b)=> b.score - a.score || a.name.localeCompare(b.name));
+      scoreList.innerHTML = '';
+      for (const e of entries){
+        const li = document.createElement('li');
+        const left = document.createElement('div'); left.textContent = e.name;
+        const right = document.createElement('div'); right.textContent = e.score;
+        li.append(left,right);
+        scoreList.appendChild(li);
+      }
+    }
+
+    function removeStudent(peerId){
+      students.delete(peerId);
+      updateStudentCount();
+      const before = buzzList.length;
+      buzzList = buzzList.filter(b=>b.id!==peerId);
+      if (buzzList.length !== before) renderBuzzList();
+    }
+
+    function resetAll(){
+      buzzList = []; renderBuzzList();
+      setLocked(true);
+      stopTimer(); updateTimerLabel(0);
+      broadcast({ type:'RESET' });
+      chordReset();
+    }
+
+    function startQuestion(){
+      // desbloquear, vaciar lista y arrancar temporizador
+      buzzList = []; renderBuzzList();
+      setLocked(false);
+      const secs = Math.max(1, parseInt(timerSeconds.value||'0',10));
+      timerEnd = Date.now() + secs*1000;
+      startTimer();
+      broadcast({ type:'UNLOCK' });
+      broadcast({ type:'TIMER_START', until: timerEnd });
+    }
+
+    function startTimer(){
+      stopTimer();
+      timerInt = setInterval(()=>{
+        const left = Math.max(0, Math.ceil((timerEnd - Date.now())/1000));
+        updateTimerLabel(left);
+        if (left <= 0){
+          stopTimer();
+          setLocked(true);
+          broadcast({ type:'LOCK' });
+          chordReset();
+        }
+      }, 250);
+    }
+    function stopTimer(){ if (timerInt){ clearInterval(timerInt); timerInt=null; } }
+    function updateTimerLabel(leftSecs){ timerLabel.textContent = secToMMSS(leftSecs); }
+
+    resetBtn.onclick = resetAll;
+    timerStartBtn.onclick = startQuestion;
+    timerStopBtn.onclick = ()=>{ stopTimer(); };
+    copyBtn.onclick = ()=>{
+      const t = roomIdEl.value;
+      if (!t) return;
+      if (navigator.clipboard && window.isSecureContext){ navigator.clipboard.writeText(t).then(()=>alert('ID copiado')); }
+      else { const ta=document.createElement('textarea'); ta.value=t; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); alert('ID copiado'); }
+    };
+
+    clearScoresBtn.onclick = ()=>{
+      scores.forEach((_,k)=>scores.set(k,0));
+      renderScores();
+      broadcast({ type:'SCORE', scores: Array.from(scores.entries()) });
+    };
+
+    showQRBtn.onclick = ()=>{
+      qrContainer.innerHTML = '';
+      new QRCode(qrContainer, { text: roomIdEl.value, width: 220, height: 220 });
+      qrText.textContent = roomIdEl.value;
+      qrModal.classList.remove('hidden');
+    };
+    closeQR.onclick = ()=> qrModal.classList.add('hidden');
+
+    // ========= CLIENTE =========
+    const studentNameEl = document.getElementById('studentName');
+    const hostIdInput = document.getElementById('hostIdInput');
+    const joinBtn = document.getElementById('joinBtn');
+    const clientConnectMsg = document.getElementById('clientConnectMsg');
+    const youAre = document.getElementById('youAre');
+    const buzzerBtn = document.getElementById('buzzerBtn');
+    const waitReset = document.getElementById('waitReset');
+    const clientLockState = document.getElementById('clientLockState');
+    const clientTimer = document.getElementById('clientTimer');
+    const myScoreEl = document.getElementById('myScore');
+
+    function showClientMsg(text, error=false){
+      if (!text){ clientConnectMsg.classList.add('hidden'); clientConnectMsg.textContent=''; return; }
+      clientConnectMsg.textContent = text;
+      clientConnectMsg.classList.remove('hidden');
+      clientConnectMsg.style.background = error ? '#fef2f2' : '#eff6ff';
+      clientConnectMsg.style.color = error ? '#b91c1c' : '#1e40af';
+      clientConnectMsg.style.padding='10px'; clientConnectMsg.style.borderRadius='10px';
+    }
+
+    joinBtn.onclick = ()=>{
+      const name = (studentNameEl.value||'').trim();
+      const host = (hostIdInput.value||'').trim();
+      if (!name || !host){ showClientMsg('Por favor introduce tu nombre y el ID de sala.'); return; }
+      clientName = name; startClient(host);
+    };
+
+    function setClientLocked(v){
+      clientLocked = v;
+      clientLockState.textContent = v ? 'bloqueado' : 'desbloqueado';
+      if (v){ buzzerBtn.classList.add('disabled'); buzzerBtn.disabled = true; }
+      else  { buzzerBtn.classList.remove('disabled'); buzzerBtn.disabled = false; }
+    }
+
+    function startClient(host){
+      try{
+        showClientMsg('Conectando con el profesor…');
+        clientPeer = new Peer({ debug:1 });
+        clientPeer.on('open', ()=>{
+          clientConn = clientPeer.connect(host, { reliable:true });
+          clientConn.on('open', ()=>{
+            showClientMsg('');
+            clientConn.send({ type:'JOIN', name: clientName });
+            youAre.textContent = clientName;
+            show(views.clientBuzzer);
+            setClientLocked(true);
+            setBuzzed(false);
+            // handlers
+            clientConn.on('data', (data)=>onClientData(data));
+            clientConn.on('close', ()=>{ alert('El profesor ha cerrado la sesión.'); location.reload(); });
+            clientConn.on('error', ()=>{ showClientMsg('Error de conexión con el profesor. Verifica el ID.', true); });
+          });
+          clientConn.on('error', ()=>{ showClientMsg('No se pudo conectar al host. Verifica el ID.', true); });
+        });
+        clientPeer.on('error', (err)=>{ const msg=(err?.type==='peer-unavailable')?'Sala no encontrada. Verifica el ID.':('Error: '+(err?.type||'desconocido')); showClientMsg(msg,true); });
+      }catch(e){
+        showClientMsg('No se pudo iniciar el cliente.', true);
+      }
+    }
+
+    function onClientData(data){
+      if (!data || !data.type) return;
+      switch(data.type){
+        case 'RESET':
+          setBuzzed(false); setClientLocked(true); stopClientTimer(); clientTimer.textContent='--:--'; chordReset(); break;
+        case 'LOCK':
+          setClientLocked(true); break;
+        case 'UNLOCK':
+          setBuzzed(false); setClientLocked(false); break;
+        case 'TIMER_START':
+          clientTimerStart(data.until); break;
+        case 'SCORE':
+          // scores -> array [peerId,score]; actualizo mi marcador si tuviera Id igual a mi peer
+          // No tengo mi peerId aquí, así que muestro el total si me encuentran por nombre (aprox).
+          const me = (data.scores||[]).find(([id,score])=>true); // el host no manda mi id aquí; solo muestro suma propia si llegan a enviar id en el futuro
+          // Para no liar, actualizamos cuando ganemos punto via notificación visual mínima:
+          const my = (data.scores||[]).find(([id,sc])=> id=== (clientPeer&&clientPeer.id));
+          if (my){ myScore = my[1]; myScoreEl.textContent = 'Tu puntuación: '+myScore; }
+          break;
+      }
+    }
+
+    function setBuzzed(isBuzzed){
+      if (isBuzzed){
+        buzzerBtn.classList.add('disabled'); buzzerBtn.disabled = true;
+        buzzerBtn.textContent = '¡PULSADO!'; waitReset.classList.remove('hidden');
+      } else {
+        buzzerBtn.classList.remove('disabled'); buzzerBtn.disabled = clientLocked;
+        buzzerBtn.textContent = 'PULSAR'; waitReset.classList.add('hidden');
+      }
+    }
+
+    function clientTimerStart(untilMs){
+      clientTimerEnd = untilMs; stopClientTimer();
+      clientTimerInt = setInterval(()=>{
+        const left = Math.max(0, Math.ceil((clientTimerEnd - Date.now())/1000));
+        clientTimer.textContent = secToMMSS(left);
+        if (left<=0){ stopClientTimer(); }
+      }, 250);
+    }
+    function stopClientTimer(){ if (clientTimerInt){ clearInterval(clientTimerInt); clientTimerInt=null; } }
+
+    buzzerBtn.onclick = ()=>{
+      if (!clientConn || clientLocked || buzzerBtn.classList.contains('disabled')) return;
+      try{ clientConn.send({ type:'BUZZ' }); setBuzzed(true); beep(1000,160); }catch(e){}
+    };
+
+    // ========= Botones top-level =========
+    // QR
+    document.getElementById('closeQR').onclick = ()=> qrModal.classList.add('hidden');
+
+  </script>
+</body>
+</html>
